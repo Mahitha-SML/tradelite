@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 40px; color: #202124; line-height: 1.5; }
+    h1 { color: #1A73E8; border-bottom: 2px solid #1A73E8; padding-bottom: 10px; margin-bottom: 30px; }
+    .header-info p { margin: 5px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+    th, td { border: 1px solid #DADCE0; padding: 12px; text-align: left; }
+    th { background-color: #F8F9FA; font-weight: bold; }
+    .right { text-align: right; }
+    .summary-box { width: 320px; float: right; margin-top: 30px; border: 1px solid #DADCE0; padding: 20px; background: #F8F9FA; }
+    .summary-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+    .total { font-weight: bold; font-size: 1.2em; border-top: 1px solid #DADCE0; padding-top: 15px; margin-top: 15px; }
+    .clear { clear: both; }
+  </style>
+</head>
+<body>
+  <h1>INVOICE</h1>
+  
+  <div class="header-info">
+    <p><strong>Date:</strong> <?= data.invoiceDate ?></p>
+    <p><strong>Location:</strong> <?= data.location ?></p>
+    <br>
+    <h3>Bill To:</h3>
+    <p>
+      <strong><?= data.customerDetails.name ?></strong><br>
+      <?= data.customerDetails.email ?><br>
+      <?= data.customerDetails.phone || '' ?>
+    </p>
+  </div>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Qty</th>
+        <th>Unit Price</th>
+        <th>Discount</th>
+        <th class="right">Line Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? for (let i = 0; i < data.lineItems.length; i++) { ?>
+        <tr>
+          <td><?= data.lineItems[i].productName ?></td>
+          <td><?= data.lineItems[i].quantity ?></td>
+          <td><?= data.lineItems[i].unitPrice.toFixed(2) ?></td>
+          <td><?= data.lineItems[i].discountValue > 0 ? data.lineItems[i].discountValue + (data.lineItems[i].discountType === 'percent' ? '%' : ' flat') : '-' ?></td>
+          <td class="right"><?= data.lineItems[i].lineTotal.toFixed(2) ?></td>
+        </tr>
+      <? } ?>
+    </tbody>
+  </table>
+
+  <div class="summary-box">
+    <div class="summary-row"><span>Subtotal:</span> <span><?= data.summary.subtotal.toFixed(2) ?></span></div>
+    <div class="summary-row"><span>Order Discount:</span> <span>- <?= data.summary.orderDiscountAmount.toFixed(2) ?></span></div>
+    <div class="summary-row"><span>Tax (<?= (data.summary.taxRate * 100) ?>%):</span> <span><?= data.summary.taxAmount.toFixed(2) ?></span></div>
+    <div class="summary-row total">
+      <span>TOTAL:</span> <span><?= data.summary.finalTotal.toFixed(2) ?></span>
+    </div>
+  </div>
+  
+  <div class="clear"></div>
+</body>
+</html>

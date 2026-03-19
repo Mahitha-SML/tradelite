@@ -1,0 +1,195 @@
+<script>
+// client.html: Application logic and UI interactions
+
+const products = [
+    { id: "P001", name: "Cotton Kurti", price: 899 },
+    { id: "P002", name: "Silk Saree", price: 2499 },
+    { id: "P003", name: "Kids Dress", price: 699 }
+];
+
+const TAX_RATE = 0.18;
+
+function init() {
+    document.getElementById('invoiceDate').valueAsDate = new Date();
+    addLineItem();
+    
+    document.getElementById('orderDiscountType').addEventListener('change', updateTotals);
+    document.getElementById('orderDiscountValue').addEventListener('input', updateTotals);
+    
+    document.getElementById('invoiceForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        generateInvoice();
+    });
+}
+
+function addLineItem() {
+    const tbody = document.getElementById('lineItemsBody');
+    const tr = document.createElement('tr');
+    tr.className = 'line-item';
+    
+    let productOptions = '<option value="" disabled selected>Select Product...</option>';
+    products.forEach(p => {
+        productOptions += `<option value="${p.id}">${p.name}</option>`;
+    });
+    
+    tr.innerHTML = `
+        <td class="col-product">
+            <select class="item-product" required onchange="onProductChange(this)">
+                ${productOptions}
+            </select>
+        </td>
+        <td class="col-qty">
+            <input type="number" class="item-qty" value="1" min="1" required oninput="updateTotals()">
+        </td>
+        <td class="col-price">
+            <input type="number" class="item-price" value="0" min="0" step="0.01" required oninput="updateTotals()">
+        </td>
+        <td class="col-distype">
+            <select class="item-distype" onchange="updateTotals()">
+                <option value="none">None</option>
+                <option value="percent">%</option>
+                <option value="amount">Amount</option>
+            </select>
+        </td>
+        <td class="col-disval">
+            <input type="number" class="item-disval" value="0" min="0" step="0.01" oninput="updateTotals()">
+        </td>
+        <td class="col-total">
+            <span class="item-total">0.00</span>
+        </td>
+        <td class="col-action">
+            <button type="button" class="btn btn-danger" onclick="removeLineItem(this)">✕</button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+    updateTotals();
+}
+
+function removeLineItem(btn) {
+    const tbody = document.getElementById('lineItemsBody');
+    if (tbody.children.length > 1) {
+        btn.closest('tr').remove();
+        updateTotals();
+    } else {
+        alert("At least one line item is required.");
+    }
+}
+
+function onProductChange(selectElement) {
+    const tr = selectElement.closest('tr');
+    const priceInput = tr.querySelector('.item-price');
+    const productId = selectElement.value;
+    const product = products.find(p => p.id === productId);
+    
+    if (product) {
+        priceInput.value = product.price;
+    } else {
+        priceInput.value = 0;
+    }
+    updateTotals();
+}
+
+function updateTotals() {
+    let subtotal = 0;
+    
+    const rows = document.querySelectorAll('.line-item');
+    rows.forEach(row => {
+        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+        const price = parseFloat(row.querySelector('.item-price').value) || 0;
+        const disType = row.querySelector('.item-distype').value;
+        const disVal = parseFloat(row.querySelector('.item-disval').value) || 0;
+        
+        let lineTotal = calculateLineItemTotal(qty, price, disType, disVal);
+        row.querySelector('.item-total').textContent = lineTotal.toFixed(2);
+        subtotal += lineTotal;
+    });
+    
+    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+    
+    const orderDisType = document.getElementById('orderDiscountType').value;
+    const orderDisVal = parseFloat(document.getElementById('orderDiscountValue').value) || 0;
+    
+    let orderDiscount = calculateOrderDiscount(subtotal, orderDisType, orderDisVal);
+    
+    document.getElementById('discountTotal').textContent = orderDiscount > 0 ? "- " + orderDiscount.toFixed(2) : "0.00";
+    
+    const taxableAmount = subtotal - orderDiscount;
+    const tax = calculateTax(taxableAmount, TAX_RATE);
+    document.getElementById('taxTotal').textContent = tax.toFixed(2);
+    
+    const finalTotal = taxableAmount + tax;
+    document.getElementById('finalTotal').textContent = finalTotal.toFixed(2);
+}
+
+function generateInvoice() {
+    if (!document.getElementById('invoiceForm').checkValidity()) return;
+
+    const items = [];
+    document.querySelectorAll('.line-item').forEach(row => {
+        const productSelect = row.querySelector('.item-product');
+        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+        if (productSelect.value && qty > 0) {
+            items.push({
+                productId: productSelect.value,
+                productName: productSelect.options[productSelect.selectedIndex].text,
+                quantity: qty,
+                unitPrice: parseFloat(row.querySelector('.item-price').value) || 0,
+                discountType: row.querySelector('.item-distype').value,
+                discountValue: parseFloat(row.querySelector('.item-disval').value) || 0,
+                lineTotal: parseFloat(row.querySelector('.item-total').textContent) || 0
+            });
+        }
+    });
+
+    if (items.length === 0) {
+        alert("Add at least one product.");
+        return;
+    }
+    
+    const invoiceData = {
+        invoiceDate: document.getElementById('invoiceDate').value,
+        location: document.getElementById('location').value,
+        customerDetails: {
+            name: document.getElementById('customerName').value,
+            email: document.getElementById('customerEmail').value,
+            phone: document.getElementById('customerPhone').value
+        },
+        lineItems: items,
+        summary: {
+            subtotal: parseFloat(document.getElementById('subtotal').textContent),
+            orderDiscountType: document.getElementById('orderDiscountType').value,
+            orderDiscountValue: parseFloat(document.getElementById('orderDiscountValue').value) || 0,
+            orderDiscountAmount: parseFloat(document.getElementById('discountTotal').textContent.replace('- ', '')),
+            taxRate: TAX_RATE,
+            taxAmount: parseFloat(document.getElementById('taxTotal').textContent),
+            finalTotal: parseFloat(document.getElementById('finalTotal').textContent)
+        }
+    };
+    
+    // Trigger PDF Generation via Apps Script Backend
+    const btn = document.querySelector('.btn-primary');
+    const originalText = btn.textContent;
+    btn.textContent = "Generating PDF...";
+    btn.disabled = true;
+
+    google.script.run
+        .withSuccessHandler(function(response) {
+            btn.textContent = originalText;
+            btn.disabled = false;
+            if (response.success) {
+                alert("PDF generated successfully and saved to your Google Drive!");
+                window.open(response.url, '_blank');
+            } else {
+                alert("Error generating PDF: " + response.error);
+            }
+        })
+        .withFailureHandler(function(error) {
+            btn.textContent = originalText;
+            btn.disabled = false;
+            alert("Network error: " + error.message);
+        })
+        .generatePDF(invoiceData);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>

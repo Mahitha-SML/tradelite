@@ -1,0 +1,33 @@
+<script>
+// util.html: Utility functions for mathematical operations and data processing
+
+function calculateLineItemTotal(qty, price, discountType, discountVal) {
+    let lineTotal = qty * price;
+    let lineDiscount = 0;
+    
+    if (discountType === 'percent') {
+        lineDiscount = lineTotal * (discountVal / 100);
+    } else if (discountType === 'amount') {
+        lineDiscount = discountVal;
+    }
+    
+    lineTotal -= lineDiscount;
+    return lineTotal < 0 ? 0 : lineTotal;
+}
+
+function calculateOrderDiscount(subtotal, discountType, discountVal) {
+    let orderDiscount = 0;
+    
+    if (discountType === 'percent') {
+        orderDiscount = subtotal * (discountVal / 100);
+    } else if (discountType === 'amount') {
+        orderDiscount = discountVal;
+    }
+    
+    return orderDiscount > subtotal ? subtotal : orderDiscount;
+}
+
+function calculateTax(taxableAmount, rate) {
+    return taxableAmount * rate;
+}
+</script>
