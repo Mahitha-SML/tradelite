@@ -262,6 +262,43 @@
             width: 100%;
         }
 
+        .product-card {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            background: var(--surface-color);
+            box-shadow: 0 1px 3px rgba(60,64,67,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: box-shadow 0.2s;
+        }
+
+        .product-card:hover {
+            box-shadow: 0 4px 6px rgba(60,64,67,0.15);
+        }
+
+        .product-card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .product-card-id {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .product-card-price {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-top: 8px;
+        }
+
         @media (max-width: 768px) {
             .summary-wrapper {
                 flex-direction: column;
@@ -275,8 +312,24 @@
 </head>
 <body>
 
-<div class="container">
-    <h1 class="header-title">Invoice Generator</h1>
+<!-- DASHBOARD VIEW -->
+<div class="container" id="dashboard-view" style="display: block;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 2px solid var(--primary-color); padding-bottom: 12px;">
+        <h1 class="header-title" style="margin: 0; border: none; padding: 0;">Sales Employee Catalog</h1>
+        <button type="button" class="btn btn-primary" onclick="showInvoiceGenerator()">+ Create Invoice</button>
+    </div>
+    
+    <div class="products-grid" id="productsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; margin-top: 20px;">
+        <!-- Product Cards injected via JavaScript -->
+    </div>
+</div>
+
+<!-- INVOICE GENERATOR VIEW -->
+<div class="container" id="invoice-view" style="display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 2px solid var(--primary-color); padding-bottom: 12px;">
+        <h1 class="header-title" style="margin: 0; border: none; padding: 0;">Invoice Generator</h1>
+        <button type="button" class="btn btn-secondary" onclick="showDashboard()">← Back to Dashboard</button>
+    </div>
     
     <form id="invoiceForm">
         <!-- Header Section -->

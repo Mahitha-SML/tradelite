@@ -1,17 +1,31 @@
 <script>
 // client.html: Application logic and UI interactions
 
-const products = [
-    { id: "P001", name: "Cotton Kurti", price: 899 },
-    { id: "P002", name: "Silk Saree", price: 2499 },
-    { id: "P003", name: "Kids Dress", price: 699 }
-];
+let products = [];
 
 const TAX_RATE = 0.18;
 
 function init() {
+    // Show a loading UI for the dashboard initially
+    const grid = document.getElementById('productsGrid');
+    if (grid) grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #5F6368; font-weight: bold;">Loading products from Google Sheets...</div>';
+    
+    // Fetch from backend
+    google.script.run
+        .withSuccessHandler(function(backendData) {
+            products = backendData;
+            renderDashboard();
+            
+            // Generate the first dropdown ONLY after products are loaded so choices show up
+            document.getElementById('lineItemsBody').innerHTML = ''; 
+            addLineItem();
+        })
+        .withFailureHandler(function(err) {
+            if (grid) grid.innerHTML = '<div style="color: red; padding: 40px;">Failed to load products: ' + err.message + '</div>';
+        })
+        .getProductsFromSheet();
+    
     document.getElementById('invoiceDate').valueAsDate = new Date();
-    addLineItem();
     
     document.getElementById('orderDiscountType').addEventListener('change', updateTotals);
     document.getElementById('orderDiscountValue').addEventListener('input', updateTotals);
@@ -20,6 +34,32 @@ function init() {
         e.preventDefault();
         generateInvoice();
     });
+}
+
+function renderDashboard() {
+    const grid = document.getElementById('productsGrid');
+    grid.innerHTML = '';
+    
+    products.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        card.innerHTML = `
+            <div class="product-card-id">SKU: ${p.id}</div>
+            <h3 class="product-card-title">${p.name}</h3>
+            <div class="product-card-price">₹${p.price.toFixed(2)}</div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function showDashboard() {
+    document.getElementById('invoice-view').style.display = 'none';
+    document.getElementById('dashboard-view').style.display = 'block';
+}
+
+function showInvoiceGenerator() {
+    document.getElementById('dashboard-view').style.display = 'none';
+    document.getElementById('invoice-view').style.display = 'block';
 }
 
 function addLineItem() {
@@ -177,7 +217,7 @@ function generateInvoice() {
             btn.textContent = originalText;
             btn.disabled = false;
             if (response.success) {
-                alert("PDF generated successfully and saved to your Google Drive!\nEmail Status: " + response.emailStatus);
+                alert("PDF generated successfully and saved to your Google Drive!\nEmail Status: " + response.emailStatus + "\nSheet Database: " + response.sheetStatus);
                 window.open(response.url, '_blank');
             } else {
                 alert("Error generating PDF: " + response.error);
