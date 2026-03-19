@@ -1,5 +1,12 @@
 // Server-side App Script logic
 
+// --- FIX PERMISSIONS HELPER ---
+// Select "enforcePermissions" from the top menu, hit Run, and accept the security popup.
+function enforcePermissions() {
+  const me = Session.getActiveUser().getEmail();
+  MailApp.sendEmail(me, "Permissions Fixed!", "Success! Your Invoice Generator web app can now officially send emails.");
+}
+
 function doGet(e) {
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
@@ -28,10 +35,29 @@ function generatePDF(invoiceData) {
     const folder = DriveApp.getFolderById('1dakstLpK73sMZ1-Vdd3BpHK04JhQV2E9');
     const file = folder.createFile(pdfBlob);
     
+    // Email Integration
+    const customerEmail = invoiceData.customerDetails.email;
+    let emailStatus = "Customer email missing.";
+    
+    if (customerEmail) {
+      try {
+        MailApp.sendEmail({
+            to: customerEmail,
+            subject: "Your Invoice from Tradelite",
+            body: "Dear " + (invoiceData.customerDetails.name || 'Customer') + ",\n\nThank you for your business. Please find your official invoice safely attached to this email.\n\nBest regards,\nTradelite Team",
+            attachments: [pdfBlob]
+        });
+        emailStatus = "Emailed successfully to " + customerEmail;
+      } catch (e) {
+        emailStatus = "Failed to email: " + e.toString();
+      }
+    }
+
     return {
       success: true,
       url: file.getUrl(),
-      name: file.getName()
+      name: file.getName(),
+      emailStatus: emailStatus
     };
   } catch (err) {
     return {

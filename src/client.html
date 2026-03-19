@@ -177,7 +177,7 @@ function generateInvoice() {
             btn.textContent = originalText;
             btn.disabled = false;
             if (response.success) {
-                alert("PDF generated successfully and saved to your Google Drive!");
+                alert("PDF generated successfully and saved to your Google Drive!\nEmail Status: " + response.emailStatus);
                 window.open(response.url, '_blank');
             } else {
                 alert("Error generating PDF: " + response.error);
