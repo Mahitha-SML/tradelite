@@ -20,7 +20,12 @@ function getProductsFromSheet() {
             productsList.push({
                 id: row[0] ? String(row[0]) : `SKU-${i}`,
                 name: row[1] ? String(row[1]) : 'Unknown Item',
-                price: parseFloat(row[2]) || 0
+                price: parseFloat(row[2]) || 0,
+                category: row[3] ? String(row[3]) : '',
+                subCategory: row[4] ? String(row[4]) : '',
+                tags: row[6] ? String(row[6]).split(',').map(t=>t.trim().toUpperCase()) : [],
+                imageURL: row[7] ? String(row[7]) : '',
+                inStock: (row[8] === undefined || row[8] === '') ? true : String(row[8]).trim().toLowerCase() === 'true'
             });
         }
     }

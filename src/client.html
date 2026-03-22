@@ -1,78 +1,336 @@
 <script>
-// client.html: Application logic and UI interactions
+    // client.html: Application logic and UI interactions
 
-let products = [];
+    let products = [];
+    let activeProducts = [];
+    let currentView = 'grid';
 
-const TAX_RATE = 0.18;
+    const TAX_RATE = 0.18;
 
-function init() {
-    // Show a loading UI for the dashboard initially
-    const grid = document.getElementById('productsGrid');
-    if (grid) grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #5F6368; font-weight: bold;">Loading products from Google Sheets...</div>';
-    
-    // Fetch from backend
-    google.script.run
-        .withSuccessHandler(function(backendData) {
-            products = backendData;
-            renderDashboard();
-            
-            // Generate the first dropdown ONLY after products are loaded so choices show up
-            document.getElementById('lineItemsBody').innerHTML = ''; 
-            addLineItem();
-        })
-        .withFailureHandler(function(err) {
-            if (grid) grid.innerHTML = '<div style="color: red; padding: 40px;">Failed to load products: ' + err.message + '</div>';
-        })
-        .getProductsFromSheet();
-    
-    document.getElementById('invoiceDate').valueAsDate = new Date();
-    
-    document.getElementById('orderDiscountType').addEventListener('change', updateTotals);
-    document.getElementById('orderDiscountValue').addEventListener('input', updateTotals);
-    
-    document.getElementById('invoiceForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        generateInvoice();
-    });
-}
+    function init() {
+        // Show a loading UI for the dashboard initially
+        const grid = document.getElementById('productsGrid');
+        if (grid) grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #5F6368; font-weight: bold;">Loading products from Google Sheets...</div>';
 
-function renderDashboard() {
-    const grid = document.getElementById('productsGrid');
-    grid.innerHTML = '';
-    
-    products.forEach(p => {
-        const card = document.createElement('div');
-        card.className = 'product-card';
-        card.innerHTML = `
-            <div class="product-card-id">SKU: ${p.id}</div>
-            <h3 class="product-card-title">${p.name}</h3>
-            <div class="product-card-price">₹${p.price.toFixed(2)}</div>
+        // Fetch from backend
+        google.script.run
+            .withSuccessHandler(function (backendData) {
+                products = backendData;
+                activeProducts = [...products];
+                populateCategoryFilters();
+                renderDashboard();
+
+                // Generate the first dropdown ONLY after products are loaded so choices show up
+                document.getElementById('lineItemsBody').innerHTML = '';
+                addLineItem();
+            })
+            .withFailureHandler(function (err) {
+                if (grid) grid.innerHTML = '<div style="color: red; padding: 40px;">Failed to load products: ' + err.message + '</div>';
+            })
+            .getProductsFromSheet();
+
+        document.getElementById('invoiceDate').valueAsDate = new Date();
+
+        document.getElementById('orderDiscountType').addEventListener('change', updateTotals);
+        document.getElementById('orderDiscountValue').addEventListener('input', updateTotals);
+
+        document.getElementById('invoiceForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            generateInvoice();
+        });
+    }
+
+    let currentCategory = '';
+    let currentSubCategory = '';
+    let currentPriceMax = Infinity;
+
+    function populateCategoryFilters() {
+        const sidebarCats = document.getElementById('sidebar-categories');
+        if (!sidebarCats) return;
+        
+        const categoriesList = [...new Set(products.map(p => p.category).filter(c => c))];
+        let catHtml = `<button class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-left border-none outline-none cursor-pointer ${currentCategory === '' ? 'bg-primary/10 text-primary font-bold' : 'bg-transparent text-slate-600 hover:bg-slate-50 font-semibold'}" onclick="setCategory('')">
+          All Categories <span class="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full">${products.length}</span>
+        </button>`;
+        
+        categoriesList.forEach(c => {
+            let count = products.filter(p => p.category === c).length;
+            catHtml += `<button class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-left border-none outline-none cursor-pointer ${currentCategory === c ? 'bg-primary/10 text-primary font-bold' : 'bg-transparent text-slate-600 hover:bg-slate-50 font-semibold'}" onclick="setCategory('${c}')">
+              ${c} <span class="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full">${count}</span>
+            </button>`;
+        });
+        sidebarCats.innerHTML = catHtml;
+
+        const sidebarSubcats = document.getElementById('sidebar-subcategories');
+        const subcategoryTitle = document.getElementById('subcategory-title');
+        
+        if (sidebarSubcats && subcategoryTitle) {
+            if (currentCategory) {
+                const subcatsList = [...new Set(products.filter(p => p.category === currentCategory).map(p => p.subCategory).filter(s => s))];
+                if (subcatsList.length > 0) {
+                    let subcatHtml = `<button class="w-full flex items-center px-3 py-2 rounded-lg text-sm transition-colors text-left border-none outline-none cursor-pointer ${currentSubCategory === '' ? 'text-primary font-bold' : 'bg-transparent text-slate-600 hover:text-primary font-semibold'}" onclick="setSubCategory('')">
+                      All ${currentCategory}
+                    </button>`;
+                    subcatsList.forEach(s => {
+                        subcatHtml += `<button class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left border-none outline-none cursor-pointer ${currentSubCategory === s ? 'text-primary font-bold' : 'bg-transparent text-slate-500 hover:text-slate-900 font-medium'}" onclick="setSubCategory('${s}')">
+                          <span class="w-1 h-1 rounded-full ${currentSubCategory === s ? 'bg-primary' : 'bg-slate-300'}"></span> ${s}
+                        </button>`;
+                    });
+                    sidebarSubcats.innerHTML = subcatHtml;
+                    
+                    subcategoryTitle.style.display = 'block';
+                    sidebarSubcats.style.display = 'flex';
+                } else {
+                    subcategoryTitle.style.display = 'none';
+                    sidebarSubcats.style.display = 'none';
+                }
+            } else {
+                subcategoryTitle.style.display = 'none';
+                sidebarSubcats.style.display = 'none';
+            }
+        }
+        
+        const sidebarPrice = document.getElementById('sidebar-price');
+        sidebarPrice.innerHTML = `
+            <label class="flex items-center gap-3 cursor-pointer group">
+              <input type="radio" name="price" value="Infinity" ${currentPriceMax===Infinity ? 'checked':''} class="w-4 h-4 text-primary focus:ring-primary border-slate-300" onchange="setPrice(Infinity)">
+              <span class="text-sm font-semibold ${currentPriceMax===Infinity?'text-slate-900':'text-slate-500 group-hover:text-slate-900'}">All Prices</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer group mt-2">
+              <input type="radio" name="price" value="6500" ${currentPriceMax===6500 ? 'checked':''} class="w-4 h-4 text-primary focus:ring-primary border-slate-300" onchange="setPrice(6500)">
+              <span class="text-sm font-semibold ${currentPriceMax===6500?'text-slate-900':'text-slate-500 group-hover:text-slate-900'}">Under ₹6,500</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer group mt-2">
+              <input type="radio" name="price" value="12501" ${currentPriceMax===12501 ? 'checked':''} class="w-4 h-4 text-primary focus:ring-primary border-slate-300" onchange="setPrice(12501)">
+              <span class="text-sm font-semibold ${currentPriceMax===12501?'text-slate-900':'text-slate-500 group-hover:text-slate-900'}">₹6,500 - ₹12,501</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer group mt-2">
+              <input type="radio" name="price" value="999999" ${currentPriceMax===999999 ? 'checked':''} class="w-4 h-4 text-primary focus:ring-primary border-slate-300" onchange="setPrice(999999)">
+              <span class="text-sm font-semibold ${currentPriceMax===999999?'text-slate-900':'text-slate-500 group-hover:text-slate-900'}">Over ₹12,501</span>
+            </label>
         `;
-        grid.appendChild(card);
-    });
-}
-
-function showDashboard() {
-    document.getElementById('invoice-view').style.display = 'none';
-    document.getElementById('dashboard-view').style.display = 'block';
-}
-
-function showInvoiceGenerator() {
-    document.getElementById('dashboard-view').style.display = 'none';
-    document.getElementById('invoice-view').style.display = 'block';
-}
-
-function addLineItem() {
-    const tbody = document.getElementById('lineItemsBody');
-    const tr = document.createElement('tr');
-    tr.className = 'line-item';
+    }
     
-    let productOptions = '<option value="" disabled selected>Select Product...</option>';
-    products.forEach(p => {
-        productOptions += `<option value="${p.id}">${p.name}</option>`;
-    });
+    window.setCategory = function(c) { currentCategory = c; currentSubCategory = ''; populateCategoryFilters(); filterDashboard(); }
+    window.setSubCategory = function(s) { currentSubCategory = s; populateCategoryFilters(); filterDashboard(); }
+    window.setPrice = function(p) { currentPriceMax = p; populateCategoryFilters(); filterDashboard(); }
     
-    tr.innerHTML = `
+    window.setView = function(type) {
+        currentView = type;
+        const btnGrid = document.getElementById('btn-grid-view');
+        const btnList = document.getElementById('btn-list-view');
+        if (!btnGrid || !btnList) return;
+        
+        if (type === 'grid') {
+            btnGrid.classList.add('bg-slate-100', 'text-slate-900');
+            btnGrid.classList.remove('text-slate-400', 'hover:text-slate-900', 'bg-transparent');
+            btnList.classList.add('text-slate-400', 'hover:text-slate-900', 'bg-transparent');
+            btnList.classList.remove('bg-slate-100', 'text-slate-900');
+        } else {
+            btnGrid.classList.add('text-slate-400', 'hover:text-slate-900', 'bg-transparent');
+            btnGrid.classList.remove('bg-slate-100', 'text-slate-900');
+            btnList.classList.add('bg-slate-100', 'text-slate-900');
+            btnList.classList.remove('text-slate-400', 'hover:text-slate-900', 'bg-transparent');
+        }
+        renderDashboard();
+    }
+
+    function filterDashboard() {
+        const search = document.getElementById('nav-search') ? document.getElementById('nav-search').value.toLowerCase() : '';
+        const sort = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'featured';
+        
+        activeProducts = products.filter(p => {
+            if (currentCategory && p.category !== currentCategory) return false;
+            if (currentSubCategory && p.subCategory !== currentSubCategory) return false;
+            
+            if (currentPriceMax) {
+                if (currentPriceMax === 6500 && p.price >= 6500) return false;
+                if (currentPriceMax === 12501 && (p.price < 6500 || p.price > 12501)) return false;
+                if (currentPriceMax === 999999 && p.price <= 12501) return false;
+            }
+            
+            if (search && !p.name.toLowerCase().includes(search)) return false;
+            return true;
+        });
+        
+        if (sort === 'priceHigh') activeProducts.sort((a,b) => b.price - a.price);
+        else if (sort === 'priceLow') activeProducts.sort((a,b) => a.price - b.price);
+        
+        const countEl = document.getElementById('item-count');
+        if(countEl) countEl.textContent = activeProducts.length + ' items found';
+        
+        renderDashboard();
+    }
+
+    function renderDashboard() {
+        const grid = document.getElementById('productsGrid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        
+        if (activeProducts.length === 0) {
+            grid.innerHTML = '<div class="col-span-full py-12 text-center text-slate-500 font-medium">No products match your filters.</div>';
+            return;
+        }
+
+        if (currentView === 'grid') {
+            grid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12';
+        } else {
+            grid.className = 'flex flex-col gap-4 mb-12';
+        }
+        
+        grid.innerHTML = activeProducts.map(p => {
+            let badgeHtml = '';
+            if (p.tags && p.tags.length > 0) {
+                const tag = p.tags[0];
+                let bg = 'bg-slate-900';
+                if(tag.includes('SALE') || tag.includes('OFF')) bg = 'bg-red-600';
+                else if(tag.includes('NEW')) bg = 'bg-primary';
+                badgeHtml = `<div class="absolute top-3 left-3 ${bg} text-white text-[10px] font-bold px-2.5 py-1 rounded-md tracking-wider z-10 shadow-sm">${tag}</div>`;
+            }
+
+            const outOfStockOverlay = !p.inStock ? `<div class="absolute inset-0 bg-slate-400/60 flex items-center justify-center backdrop-blur-[1px] z-10"><span class="bg-white/95 text-slate-900 text-xs font-bold px-4 py-2 rounded-lg tracking-widest shadow-md shadow-black/10">CURRENTLY UNAVAILABLE</span></div>` : '';
+
+            const imgHtml = p.imageURL ? 
+                `<img src="${p.imageURL}" class="w-full h-full object-cover">` : 
+                `<div class="w-full h-full bg-slate-200 flex items-center justify-center"><span class="material-symbols-outlined text-[48px] text-slate-400">image</span></div>`;
+
+            if (currentView === 'list') {
+                return `
+                  <div class="product-card-container bg-white rounded-[20px] overflow-hidden shadow-sm border border-slate-200 relative transition-transform hover:-translate-y-1 hover:shadow-md cursor-pointer flex flex-row items-center p-4 gap-6" onclick="showProductDetails('${p.id}')">
+                    <div class="relative w-32 h-32 bg-slate-100 rounded-xl overflow-hidden flex-shrink-0">
+                      ${badgeHtml}
+                      ${outOfStockOverlay}
+                      ${imgHtml}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <span class="text-[10px] font-extrabold text-primary uppercase tracking-widest block mb-1">${p.category || 'SKU'} ${p.subCategory ? '· ' + p.subCategory : ''}</span>
+                      <h3 class="font-bold text-slate-900 text-lg leading-tight mb-1 truncate ${!p.inStock ? 'opacity-50' : ''}">${p.name}</h3>
+                      <p class="text-sm text-slate-500 mb-3 font-medium line-clamp-2 pr-4">${p.description || "Designed for both comfort and an elegant aesthetic."}</p>
+                      <div class="flex items-center gap-2">
+                        <span class="font-bold ${!p.inStock ? 'text-slate-400' : 'text-slate-900'} text-xl">₹${p.price.toFixed(0)}</span>
+                      </div>
+                    </div>
+                    <div class="absolute top-4 right-4 z-10">
+                        <button class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer border-none" onclick="event.stopPropagation();">
+                            <span class="material-symbols-outlined text-[16px]">favorite</span>
+                        </button>
+                    </div>
+                  </div>
+                `;
+            } else {
+                return `
+                  <div class="product-card-container block bg-white rounded-[20px] overflow-hidden shadow-sm border border-slate-200 group relative transition-transform hover:-translate-y-1 hover:shadow-md cursor-pointer" onclick="showProductDetails('${p.id}')">
+                    <div class="relative w-full aspect-[4/5] bg-slate-100 overflow-hidden">
+                      ${badgeHtml}
+                      ${outOfStockOverlay}
+                      <button class="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 backdrop-blur shadow-sm flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors z-[12] border-none cursor-pointer" onclick="event.stopPropagation();">
+                        <span class="material-symbols-outlined text-[16px]">favorite</span>
+                      </button>
+                      ${imgHtml}
+                    </div>
+                    <div class="p-5">
+                      <span class="text-[10px] font-extrabold text-primary uppercase tracking-widest block mb-1.5">${p.category || 'SKU'} ${p.subCategory ? '· ' + p.subCategory : ''}</span>
+                      <h3 class="font-bold text-slate-900 text-base leading-tight mb-2 truncate ${!p.inStock ? 'opacity-50' : ''}">${p.name}</h3>
+                      <div class="flex items-center gap-2 mt-4">
+                        <span class="font-bold ${!p.inStock ? 'text-slate-400' : 'text-slate-900'} text-xl">₹${p.price.toFixed(0)}</span>
+                      </div>
+                    </div>
+                  </div>
+                `;
+            }
+        }).join('');
+    }
+
+    function showProductDetails(id) {
+        const p = products.find(prod => prod.id === id);
+        if (!p) return;
+
+        const modalContent = document.getElementById('product-modal-content');
+        const modal = document.getElementById('product-modal');
+        
+        let badgeHtml = '';
+        if (p.tags && p.tags.length > 0) {
+            badgeHtml = p.tags.map(tag => {
+                let bg = 'bg-slate-900';
+                if(tag.includes('SALE') || tag.includes('OFF')) bg = 'bg-red-600';
+                else if(tag.includes('NEW')) bg = 'bg-primary';
+                return `<span class="${bg} text-white text-[10px] font-bold px-2.5 py-1 rounded-md tracking-wider shadow-sm uppercase inline-block mr-2">${tag}</span>`;
+            }).join('');
+        }
+
+        const outOfStockOverlay = !p.inStock ? 
+            `<div class="absolute inset-0 bg-slate-400/60 flex items-center justify-center backdrop-blur-[1px] z-10">
+                <span class="bg-white/95 text-slate-900 text-sm font-bold px-5 py-3 rounded-xl tracking-widest shadow-lg">CURRENTLY UNAVAILABLE</span>
+             </div>` : '';
+
+        const imgHtml = p.imageURL ? 
+            `<img src="${p.imageURL}" class="w-full h-full object-cover">` : 
+            `<div class="w-full h-full bg-slate-200 flex items-center justify-center"><span class="material-symbols-outlined text-[64px] text-slate-400">image</span></div>`;
+
+        modalContent.innerHTML = `
+            <!-- Left Side Image -->
+            <div class="w-full md:w-1/2 relative bg-slate-100 min-h-[300px] md:min-h-[500px]">
+                ${outOfStockOverlay}
+                ${imgHtml}
+            </div>
+            
+            <!-- Right Side Content -->
+            <div class="w-full md:w-1/2 p-6 md:p-10 flex flex-col justify-start overflow-y-auto">
+                <div class="mb-4">
+                    ${badgeHtml}
+                </div>
+                
+                <span class="text-xs font-bold text-slate-400 tracking-widest uppercase mb-2 block">${p.category || 'CATEGORY'} ${p.subCategory ? ' / ' + p.subCategory : ''}</span>
+                <h2 class="text-3xl font-extrabold text-slate-900 mb-4 leading-tight">${p.name}</h2>
+                
+                <div class="flex items-center gap-4 mb-6 pb-6 border-b border-slate-100">
+                    <span class="text-3xl font-bold ${!p.inStock ? 'text-slate-400' : 'text-primary'}">₹${p.price.toFixed(0)}</span>
+                    ${p.inStock ? `<span class="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-md">IN STOCK</span>` : ''}
+                </div>
+
+                <div class="prose prose-sm text-slate-600 mb-8 whitespace-pre-wrap flex-grow">${p.description || "Designed for both comfort and an elegant aesthetic, making it an essential addition to any modern wardrobe. This item features premium materials and meticulous craftsmanship."}</div>
+                
+                <div class="mt-auto pt-6 gap-3 flex flex-col sm:flex-row">
+                    <button class="flex-1 bg-slate-900 text-white font-bold py-3.5 px-6 rounded-xl hover:bg-slate-800 transition-colors shadow-md disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed" ${!p.inStock ? 'disabled' : ''}>
+                        Add to Order
+                    </button>
+                    <button class="w-full sm:w-auto border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 font-bold py-3.5 px-6 rounded-xl transition-colors flex items-center justify-center shadow-sm">
+                        <span class="material-symbols-outlined">favorite</span>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden'; // stop background scrolling
+    }
+
+    window.closeProductDetails = function() {
+        document.getElementById('product-modal').style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    function showDashboard() {
+        document.getElementById('invoice-view').style.display = 'none';
+        document.getElementById('dashboard-view').style.display = 'block';
+    }
+
+    function showInvoiceGenerator() {
+        document.getElementById('dashboard-view').style.display = 'none';
+        document.getElementById('invoice-view').style.display = 'block';
+    }
+
+    function addLineItem() {
+        const tbody = document.getElementById('lineItemsBody');
+        const tr = document.createElement('tr');
+        tr.className = 'line-item';
+
+        let productOptions = '<option value="" disabled selected>Select Product...</option>';
+        products.forEach(p => {
+            productOptions += `<option value="${p.id}">${p.name}</option>`;
+        });
+
+        tr.innerHTML = `
         <td class="col-product">
             <select class="item-product" required onchange="onProductChange(this)">
                 ${productOptions}
@@ -101,135 +359,135 @@ function addLineItem() {
             <button type="button" class="btn btn-danger" onclick="removeLineItem(this)">✕</button>
         </td>
     `;
-    tbody.appendChild(tr);
-    updateTotals();
-}
-
-function removeLineItem(btn) {
-    const tbody = document.getElementById('lineItemsBody');
-    if (tbody.children.length > 1) {
-        btn.closest('tr').remove();
+        tbody.appendChild(tr);
         updateTotals();
-    } else {
-        alert("At least one line item is required.");
     }
-}
 
-function onProductChange(selectElement) {
-    const tr = selectElement.closest('tr');
-    const priceInput = tr.querySelector('.item-price');
-    const productId = selectElement.value;
-    const product = products.find(p => p.id === productId);
-    
-    if (product) {
-        priceInput.value = product.price;
-    } else {
-        priceInput.value = 0;
-    }
-    updateTotals();
-}
-
-function updateTotals() {
-    let subtotal = 0;
-    
-    const rows = document.querySelectorAll('.line-item');
-    rows.forEach(row => {
-        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-        const price = parseFloat(row.querySelector('.item-price').value) || 0;
-        const disType = row.querySelector('.item-distype').value;
-        const disVal = parseFloat(row.querySelector('.item-disval').value) || 0;
-        
-        let lineTotal = calculateLineItemTotal(qty, price, disType, disVal);
-        row.querySelector('.item-total').textContent = lineTotal.toFixed(2);
-        subtotal += lineTotal;
-    });
-    
-    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
-    
-    const orderDisType = document.getElementById('orderDiscountType').value;
-    const orderDisVal = parseFloat(document.getElementById('orderDiscountValue').value) || 0;
-    
-    let orderDiscount = calculateOrderDiscount(subtotal, orderDisType, orderDisVal);
-    
-    document.getElementById('discountTotal').textContent = orderDiscount > 0 ? "- " + orderDiscount.toFixed(2) : "0.00";
-    
-    const taxableAmount = subtotal - orderDiscount;
-    const tax = calculateTax(taxableAmount, TAX_RATE);
-    document.getElementById('taxTotal').textContent = tax.toFixed(2);
-    
-    const finalTotal = taxableAmount + tax;
-    document.getElementById('finalTotal').textContent = finalTotal.toFixed(2);
-}
-
-function generateInvoice() {
-    if (!document.getElementById('invoiceForm').checkValidity()) return;
-
-    const items = [];
-    document.querySelectorAll('.line-item').forEach(row => {
-        const productSelect = row.querySelector('.item-product');
-        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-        if (productSelect.value && qty > 0) {
-            items.push({
-                productId: productSelect.value,
-                productName: productSelect.options[productSelect.selectedIndex].text,
-                quantity: qty,
-                unitPrice: parseFloat(row.querySelector('.item-price').value) || 0,
-                discountType: row.querySelector('.item-distype').value,
-                discountValue: parseFloat(row.querySelector('.item-disval').value) || 0,
-                lineTotal: parseFloat(row.querySelector('.item-total').textContent) || 0
-            });
+    function removeLineItem(btn) {
+        const tbody = document.getElementById('lineItemsBody');
+        if (tbody.children.length > 1) {
+            btn.closest('tr').remove();
+            updateTotals();
+        } else {
+            alert("At least one line item is required.");
         }
-    });
-
-    if (items.length === 0) {
-        alert("Add at least one product.");
-        return;
     }
-    
-    const invoiceData = {
-        invoiceDate: document.getElementById('invoiceDate').value,
-        location: document.getElementById('location').value,
-        customerDetails: {
-            name: document.getElementById('customerName').value,
-            email: document.getElementById('customerEmail').value,
-            phone: document.getElementById('customerPhone').value
-        },
-        lineItems: items,
-        summary: {
-            subtotal: parseFloat(document.getElementById('subtotal').textContent),
-            orderDiscountType: document.getElementById('orderDiscountType').value,
-            orderDiscountValue: parseFloat(document.getElementById('orderDiscountValue').value) || 0,
-            orderDiscountAmount: parseFloat(document.getElementById('discountTotal').textContent.replace('- ', '')),
-            taxRate: TAX_RATE,
-            taxAmount: parseFloat(document.getElementById('taxTotal').textContent),
-            finalTotal: parseFloat(document.getElementById('finalTotal').textContent)
-        }
-    };
-    
-    // Trigger PDF Generation via Apps Script Backend
-    const btn = document.querySelector('.btn-primary');
-    const originalText = btn.textContent;
-    btn.textContent = "Generating PDF...";
-    btn.disabled = true;
 
-    google.script.run
-        .withSuccessHandler(function(response) {
-            btn.textContent = originalText;
-            btn.disabled = false;
-            if (response.success) {
-                alert("PDF generated successfully and saved to your Google Drive!\nEmail Status: " + response.emailStatus + "\nSheet Database: " + response.sheetStatus);
-                window.open(response.url, '_blank');
-            } else {
-                alert("Error generating PDF: " + response.error);
+    function onProductChange(selectElement) {
+        const tr = selectElement.closest('tr');
+        const priceInput = tr.querySelector('.item-price');
+        const productId = selectElement.value;
+        const product = products.find(p => p.id === productId);
+
+        if (product) {
+            priceInput.value = product.price;
+        } else {
+            priceInput.value = 0;
+        }
+        updateTotals();
+    }
+
+    function updateTotals() {
+        let subtotal = 0;
+
+        const rows = document.querySelectorAll('.line-item');
+        rows.forEach(row => {
+            const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+            const price = parseFloat(row.querySelector('.item-price').value) || 0;
+            const disType = row.querySelector('.item-distype').value;
+            const disVal = parseFloat(row.querySelector('.item-disval').value) || 0;
+
+            let lineTotal = calculateLineItemTotal(qty, price, disType, disVal);
+            row.querySelector('.item-total').textContent = lineTotal.toFixed(2);
+            subtotal += lineTotal;
+        });
+
+        document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+
+        const orderDisType = document.getElementById('orderDiscountType').value;
+        const orderDisVal = parseFloat(document.getElementById('orderDiscountValue').value) || 0;
+
+        let orderDiscount = calculateOrderDiscount(subtotal, orderDisType, orderDisVal);
+
+        document.getElementById('discountTotal').textContent = orderDiscount > 0 ? "- " + orderDiscount.toFixed(2) : "0.00";
+
+        const taxableAmount = subtotal - orderDiscount;
+        const tax = calculateTax(taxableAmount, TAX_RATE);
+        document.getElementById('taxTotal').textContent = tax.toFixed(2);
+
+        const finalTotal = taxableAmount + tax;
+        document.getElementById('finalTotal').textContent = finalTotal.toFixed(0);
+    }
+
+    function generateInvoice() {
+        if (!document.getElementById('invoiceForm').checkValidity()) return;
+
+        const items = [];
+        document.querySelectorAll('.line-item').forEach(row => {
+            const productSelect = row.querySelector('.item-product');
+            const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+            if (productSelect.value && qty > 0) {
+                items.push({
+                    productId: productSelect.value,
+                    productName: productSelect.options[productSelect.selectedIndex].text,
+                    quantity: qty,
+                    unitPrice: parseFloat(row.querySelector('.item-price').value) || 0,
+                    discountType: row.querySelector('.item-distype').value,
+                    discountValue: parseFloat(row.querySelector('.item-disval').value) || 0,
+                    lineTotal: parseFloat(row.querySelector('.item-total').textContent) || 0
+                });
             }
-        })
-        .withFailureHandler(function(error) {
-            btn.textContent = originalText;
-            btn.disabled = false;
-            alert("Network error: " + error.message);
-        })
-        .generatePDF(invoiceData);
-}
+        });
 
-document.addEventListener('DOMContentLoaded', init);
+        if (items.length === 0) {
+            alert("Add at least one product.");
+            return;
+        }
+
+        const invoiceData = {
+            invoiceDate: document.getElementById('invoiceDate').value,
+            location: document.getElementById('location').value,
+            customerDetails: {
+                name: document.getElementById('customerName').value,
+                email: document.getElementById('customerEmail').value,
+                phone: document.getElementById('customerPhone').value
+            },
+            lineItems: items,
+            summary: {
+                subtotal: parseFloat(document.getElementById('subtotal').textContent),
+                orderDiscountType: document.getElementById('orderDiscountType').value,
+                orderDiscountValue: parseFloat(document.getElementById('orderDiscountValue').value) || 0,
+                orderDiscountAmount: parseFloat(document.getElementById('discountTotal').textContent.replace('- ', '')),
+                taxRate: TAX_RATE,
+                taxAmount: parseFloat(document.getElementById('taxTotal').textContent),
+                finalTotal: parseFloat(document.getElementById('finalTotal').textContent)
+            }
+        };
+
+        // Trigger PDF Generation via Apps Script Backend
+        const btn = document.querySelector('#invoiceForm .btn-primary');
+        const originalText = btn.textContent;
+        btn.textContent = "Generating PDF... Please wait";
+        btn.disabled = true;
+
+        google.script.run
+            .withSuccessHandler(function (response) {
+                btn.textContent = originalText;
+                btn.disabled = false;
+                if (response.success) {
+                    alert("PDF generated successfully and saved to your Google Drive!\nEmail Status: " + response.emailStatus + "\nSheet Database: " + response.sheetStatus);
+                    window.open(response.url, '_blank');
+                } else {
+                    alert("Error generating PDF: " + response.error);
+                }
+            })
+            .withFailureHandler(function (error) {
+                btn.textContent = originalText;
+                btn.disabled = false;
+                alert("Network error: " + error.message);
+            })
+            .generatePDF(invoiceData);
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
 </script>
