@@ -8,6 +8,11 @@
     const TAX_RATE = 0.18;
 
     function init() {
+        if (localStorage.getItem('isAuthenticated') === 'true') {
+            const authView = document.getElementById('auth-view');
+            if (authView) authView.style.display = 'none';
+        }
+
         // Show a loading UI for the dashboard initially
         const grid = document.getElementById('productsGrid');
         if (grid) grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #5F6368; font-weight: bold;">Loading products from Google Sheets...</div>';
@@ -487,6 +492,58 @@
                 alert("Network error: " + error.message);
             })
             .generatePDF(invoiceData);
+    }
+
+    window.requestCode = function() {
+        const phone = document.getElementById('auth-phone').value.trim();
+        if (!phone) { alert("Please enter your phone number."); return; }
+        
+        const btn = document.getElementById('btn-request-otp');
+        const original = btn.textContent;
+        btn.disabled = true; btn.textContent = "Sending OTP...";
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.disabled = false; btn.textContent = original;
+                if (res.success) {
+                    document.getElementById('auth-step-phone').style.display = 'none';
+                    document.getElementById('auth-step-otp').style.display = 'flex';
+                    document.getElementById('auth-subtitle').innerHTML = `A verification code was sent to your email. <br>Please enter the code to continue.`;
+                } else {
+                    alert("Error: " + res.error);
+                }
+            })
+            .withFailureHandler(err => { btn.disabled = false; btn.textContent = original; alert("Request Failed: " + err.message); })
+            .sendOTP(phone);
+    }
+
+    window.verifyCode = function() {
+        const phone = document.getElementById('auth-phone').value.trim();
+        const otp = document.getElementById('auth-otp').value.trim();
+        if (!otp) { alert("Please enter code."); return; }
+
+        const btn = document.getElementById('btn-verify-otp');
+        const original = btn.textContent;
+        btn.disabled = true; btn.textContent = "Verifying...";
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.disabled = false; btn.textContent = original;
+                if (res.success) {
+                    document.getElementById('auth-view').style.display = 'none';
+                    localStorage.setItem('isAuthenticated', 'true');
+                } else {
+                    alert("Error: " + res.error);
+                }
+            })
+            .withFailureHandler(err => { btn.disabled = false; btn.textContent = original; alert("Verification Failed: " + err.message); })
+            .verifyOTP(phone, otp);
+    }
+
+    window.backToPhone = function() {
+        document.getElementById('auth-step-otp').style.display = 'none';
+        document.getElementById('auth-step-phone').style.display = 'flex';
+        document.getElementById('auth-subtitle').textContent = "Verify your phone number to access the dashboard.";
     }
 
     document.addEventListener('DOMContentLoaded', init);

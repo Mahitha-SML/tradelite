@@ -359,6 +359,40 @@
 
 <body>
 
+    <!-- AUTH VIEW -->
+    <div id="auth-view" style="display: flex; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; flex-direction: column; align-items: center; justify-content: center; background: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1920&q=80') center/cover no-repeat;">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-md"></div>
+        <div class="relative bg-white p-8 rounded-[24px] shadow-2xl w-full max-w-md flex flex-col items-center gap-6">
+            <div class="w-12 h-12 rounded-xl bg-primary text-white flex items-center justify-center shadow-md shadow-primary/20">
+                <span class="material-symbols-outlined text-[28px]">shopping_bag</span>
+            </div>
+            
+            <div class="text-center">
+                <h2 class="text-2xl font-black text-slate-900 tracking-tight">Staff Authentication</h2>
+                <p class="text-xs text-slate-500 font-medium mt-1" id="auth-subtitle">Verify your phone number to access the dashboard.</p>
+            </div>
+
+            <!-- Phone Step -->
+            <div id="auth-step-phone" class="w-full flex flex-col gap-4">
+                <div class="form-group w-full flex flex-col">
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Phone Number</label>
+                    <input type="tel" id="auth-phone" placeholder="+91 9876543210" class="p-3 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm font-medium">
+                </div>
+                <button onclick="requestCode()" class="bg-primary text-white text-sm font-bold p-3.5 rounded-xl hover:bg-primary-dark shadow-md flex justify-center items-center gap-2 cursor-pointer border-none" id="btn-request-otp">Send Verification Code</button>
+            </div>
+
+            <!-- Verification Step -->
+            <div id="auth-step-otp" class="w-full flex font-sans flex-col gap-4" style="display: none;">
+                <div class="form-group w-full flex flex-col">
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Verification Code</label>
+                    <input type="number" id="auth-otp" placeholder="123456" class="p-3 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-primary focus:border-primary text-center tracking-widest text-lg font-bold">
+                </div>
+                <button onclick="verifyCode()" class="bg-primary text-white text-sm font-bold p-3.5 rounded-xl hover:bg-primary-dark shadow-md flex justify-center items-center gap-2 cursor-pointer border-none" id="btn-verify-otp">Verify & Sign In</button>
+                <button onclick="backToPhone()" class="text-xs text-primary font-bold hover:underline bg-transparent border-none cursor-pointer text-center mt-1">Change Phone Number</button>
+            </div>
+        </div>
+    </div>
+
     <!-- DASHBOARD VIEW -->
     <div id="dashboard-view"
         style="display: block; width: 100vw; min-height: 100vh; background-color: white; font-family: 'Inter', sans-serif; position: absolute; top:0; left:0; right: 0; padding-bottom: 60px; z-index: 50;">

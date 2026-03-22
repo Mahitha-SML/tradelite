@@ -141,3 +141,66 @@ function generatePDF(invoiceData) {
     };
   }
 }
+
+function sendOTP(phone) {
+  try {
+    const ssId = '1aYjhnZPkIJRyV6RbgVWLEtVuF6jJ1iosMnXClwFylB0';
+    const ss = SpreadsheetApp.openById(ssId);
+    let sheet = ss.getSheetByName('Users');
+    if (!sheet) {
+      sheet = ss.insertSheet('Users');
+      sheet.appendRow(['Phone', 'Email', 'Name']);
+      return { success: false, error: "A 'Users' sheet was created for you. Please add rows with Phone (Col A) and Email (Col B) in your Google Spreadsheet before trying again." };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    let userEmail = '';
+    
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const rowPhone = String(row[0]).trim().replace(/\D/g, ''); 
+        const targetPhone = phone.trim().replace(/\D/g, '');
+        
+        // Match if identical or endsWith to account for country code +91 discrepancies
+        if (rowPhone && targetPhone && (rowPhone === targetPhone || targetPhone.endsWith(rowPhone) || rowPhone.endsWith(targetPhone))) {
+            userEmail = String(row[1]).trim();
+            break;
+        }
+    }
+    
+    if (!userEmail) {
+        return { success: false, error: "Phone number not registered or linked as staff." };
+    }
+    
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    const scriptProps = PropertiesService.getScriptProperties();
+    scriptProps.setProperty('OTP_' + phone.trim().replace(/\D/g, ''), otp.toString());
+    
+    MailApp.sendEmail({
+        to: userEmail,
+        subject: "TradeLite Admin Authentication Code",
+        body: "Hello,\n\nYour authentication code for the TradeLite Sales Dashboard is: " + otp + "\n\nDo not share this code with anyone.\n\nBest regards,\nTradeLite Team"
+    });
+    
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function verifyOTP(phone, otp) {
+  try {
+    const sanitizedPhone = phone.trim().replace(/\D/g, '');
+    const scriptProps = PropertiesService.getScriptProperties();
+    const storedOtp = scriptProps.getProperty('OTP_' + sanitizedPhone);
+    
+    if (storedOtp && storedOtp === otp.trim()) {
+        scriptProps.deleteProperty('OTP_' + sanitizedPhone); 
+        return { success: true };
+    } else {
+        return { success: false, error: "Incorrect or expired Verification Code." };
+    }
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
