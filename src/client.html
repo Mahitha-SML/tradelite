@@ -8,11 +8,6 @@
     const TAX_RATE = 0.18;
 
     function init() {
-        if (localStorage.getItem('isAuthenticated') === 'true') {
-            const authView = document.getElementById('auth-view');
-            if (authView) authView.style.display = 'none';
-        }
-
         // Show a loading UI for the dashboard initially
         const grid = document.getElementById('productsGrid');
         if (grid) grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #5F6368; font-weight: bold;">Loading products from Google Sheets...</div>';
@@ -421,7 +416,7 @@
         document.getElementById('taxTotal').textContent = tax.toFixed(2);
 
         const finalTotal = taxableAmount + tax;
-        document.getElementById('finalTotal').textContent = finalTotal.toFixed(0);
+        document.getElementById('finalTotal').textContent = finalTotal.toFixed(2);
     }
 
     function generateInvoice() {
